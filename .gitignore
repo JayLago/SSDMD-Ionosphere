@@ -4,6 +4,9 @@
 *.pkl
 *.mat
 *.png
+*.eps
+*.pdf
+*.svg
 
 
 # Byte-compiled / optimized / DLL files
