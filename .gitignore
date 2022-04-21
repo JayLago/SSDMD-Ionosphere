@@ -1,3 +1,11 @@
+#### Added by Jay Lago
+.DS_Store
+*.fig
+*.pkl
+*.mat
+*.png
+
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
