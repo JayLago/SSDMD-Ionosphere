@@ -5,22 +5,31 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 clear; close all; clc;
 
+% To run single-threaded set num cores to -1
 global num_cores
 num_cores = 8;
 if isempty(gcp('nocreate'))
     parpool(num_cores);
 end
 
-saveFigs = false;
+saveFigs = true;
+figDPI = 150;
 figCount = 1;
 fontSize = 32;
 fontSizeBig = 42;
 
 dataName = 'BC840_2018-02-01_2018-02-13';
 load(dataName);
-nh_clip = 250;
-ne = ne(1:nh_clip, :);
-heights = heights(1:nh_clip);
+h_low = 50;
+h_high = 250;
+ne = ne(h_low:h_high, :);
+heights = heights(h_low:h_high);
+
+%TODO - remove - outliers
+badid = [1135, 1641, 2536, 3090, 3422, 3698];
+for ii=badid
+    ne(:, ii) = (ne(:, ii-1) + ne(:, ii+1)) ./ 2;
+end
 
 day = 288;          % 5 minute measurement cadence => 288 measurements per day
 num_days = 13;      % Full dataset contains 13 days exactly
@@ -44,13 +53,17 @@ wave_levels = floor(log2(train_stop_day - train_start_day + 1));
 % Run SSDMD on training data
 model = ssdmd(gtrain, wave_levels, wave_type, dmd_tol, corr_tol, day, dt, num_pred);
 
-% Model errors
+
+%% Compute model errors
+% SSDMD absolute percent error (pointwise)
 abs_per_err_ssdmd = 100*abs((ne - model.full_recon)./ne);
 
+% IRI absolute precent error  (pointwise)
 iri = load('IRI_Ne_2018-02-01');
 iri_ne = iri.ne;
 abs_per_err_iri = 100*abs((ne - iri_ne)./ne);
 
+% Simple median model absolute percent error (pointwise)
 median_model = zeros(length(heights), day);
 tmp_ne = ne(:, 1:train_stop_day);
 for ii=1:day
@@ -88,12 +101,12 @@ fig = gcf;
 fig.Units = 'inches';
 set(fig, 'position', [0 10.7222 24.7778 7.8333])
 if saveFigs
-    exportgraphics(fig, './results/Boulder/fig_data_2018.eps', 'Resolution', 300)
+    exportgraphics(fig, './results/Boulder/fig_data_2018.eps', 'Resolution', figDPI)
     close(fig);
 end
 
 %% Hilbert spectrum
-tmpne = ne + meanNe;
+tmpne = ne - mean(mean(ne));
 imf = emd(tmpne(150, :));
 hht(imf, day)
 h = set(gca,'FontSize', fontSize);
@@ -113,73 +126,85 @@ fig.Units = 'inches';
 set(fig, 'position', [0 10.7639 16.8194 7.7917])
 if saveFigs
     exportgraphics(fig, './results/Boulder/fig_data_hilbert_2018.eps', ...
-        'Resolution', 300)
+        'Resolution', figDPI)
     close(fig);
 end
 
 
 %% All wavelet scale reconstructions
+% lefts = [1,5,9];
+% bottoms = [8,9,10,11];
 wave_scales = model.sep_scales;
 [nrows, ncols, nscales] = size(wave_scales);
 figure
-tiledlayout(2, 3, 'TileSpacing','Compact', 'Padding', 'Compact');
+tiledlayout(3, 4, 'TileSpacing','Compact', 'Padding', 'Compact');
 hold on
-for ii=1:6
+for ii=1:nscales
     nexttile;
     surf(wave_scales(:, :, ii));
     shading flat
     view([0, 90]);
     h = set(gca,'FontSize', fontSize);
     c = colorbar;
-    set(h,'Interpreter','LaTeX');
-    xticks([1:day:ncols+1]);
-    xticklabels([0:num_days+1]);
-    xlabel('Time (days)', 'FontSize', fontSize);
-    yticks([1:100:num_rows])
-    yticklabels([heights(1:100:end)])
+%     if sum(ii==lefts)>0
+        yticks([1:100:num_rows])
+        yticklabels([heights(1:100:end)])
+        ylim([0, 250])
+        ylabel('Height (km)', 'FontSize', fontSize);
+%     else
+%         yticks([]);
+%         yticklabels([]);
+%     end
+%     if sum(ii==bottoms)>0
+        xticks(1:3*day:ncols+1);
+        xticklabels([0:3:num_days+1]);
+        xlabel('Time (days)', 'FontSize', fontSize);
+%     else
+%         xticks([]);
+%         xticklabels([]);
+%     end
     ylim([0, 250])
     xlim([0, train_stop_day])
-    ylabel('Height (km)', 'FontSize', fontSize);
-    title(sprintf("Wavelet scale %d", ii), 'FontSize', fontSize);
+    title(sprintf("Wavelet Scale %d", ii), 'FontSize', fontSize);
 end
 hold off;
 fig1 = gcf;
 fig1.Units = 'inches';
-set(fig1, 'position', [0 8.1111 33.1250 10.4444])
+set(fig1, 'position', [0 0 47.7778 18.5555])
 if saveFigs
-    exportgraphics(fig1, './results/Boulder/fig_wavelet_scale_reconstructions1_2018.eps', 'Resolution', 300)
+    exportgraphics(fig1, './results/Boulder/fig_wavelet_scale_reconstructions1_2018.eps', 'Resolution', figDPI)
     close(fig1);
 end
 
-figure
-tiledlayout(2, 3, 'TileSpacing','Compact', 'Padding', 'Compact');
-hold on
-for ii=7:nscales
-    nexttile;
-    surf(wave_scales(:, :, ii));
-    shading flat
-    view([0, 90]);
-    h = set(gca,'FontSize', fontSize);
-    c = colorbar;
-    set(h,'Interpreter','LaTeX');
-    xticks([1:day:ncols+1]);
-    xticklabels([0:num_days+1]);
-    xlabel('Time (days)', 'FontSize', fontSize);
-    yticks([1:100:num_rows])
-    yticklabels([heights(1:100:end)])
-    ylim([0, 250])
-    xlim([0, train_stop_day])
-    ylabel('Height (km)', 'FontSize', fontSize);
-    title(sprintf("Wavelet scale %d", ii), 'FontSize', fontSize);
-end
-hold off;
-fig2 = gcf;
-fig2.Units = 'inches';
-set(fig2, 'position', [0 8.1111 33.1250 10.4444])
-if saveFigs
-    exportgraphics(fig2, './results/Boulder/fig_wavelet_scale_reconstructions2_2018.eps', 'Resolution', 300)
-    close(fig2);
-end
+% figure
+% tiledlayout(2, 3, 'TileSpacing','Compact', 'Padding', 'Compact');
+% hold on
+% for ii=7:nscales
+%     nexttile;
+%     surf(wave_scales(:, :, ii));
+%     shading flat
+%     view([0, 90]);
+%     h = set(gca,'FontSize', fontSize);
+%     c = colorbar;
+%     set(h,'Interpreter','LaTeX');
+%     xticks([1:day:ncols+1]);
+%     xticklabels([0:num_days+1]);
+%     xlabel('Time (days)', 'FontSize', fontSize);
+%     yticks([1:100:num_rows])
+%     yticklabels([heights(1:100:end)])
+%     ylim([0, 250])
+%     xlim([0, train_stop_day])
+%     ylabel('Height (km)', 'FontSize', fontSize);
+%     title(sprintf("Wavelet scale %d", ii), 'FontSize', fontSize);
+% end
+% hold off;
+% fig2 = gcf;
+% fig2.Units = 'inches';
+% set(fig2, 'position', [0 8.1111 33.1250 10.4444])
+% if saveFigs
+%     exportgraphics(fig2, './results/Boulder/fig_wavelet_scale_reconstructions2_2018.eps', 'Resolution', figDPI)
+%     close(fig2);
+% end
 
 
 %% Correlation matrix and adjacency graph
@@ -187,7 +212,8 @@ corrs = model.corr_vals;
 graph = model.graph;
 [nrows, ncols] = size(corrs);
 figure
-tiledlayout(1, 1, 'TileSpacing','Compact', 'Padding', 'Compact');
+tiledlayout(1, 2, 'TileSpacing','Compact', 'Padding', 'Compact');
+nexttile;
 hold on
 surf(log10(corrs));
 shading flat
@@ -206,16 +232,17 @@ yticks([1:nrows]);
 ylabel('Wavelet index', 'FontSize', fontSize);
 title('Correlation matrix', 'FontSize', fontSize);
 hold off;
-fig = gcf;
-fig.Units = 'inches';
-set(fig, 'position', [0 6.1250 14 7.9861])
-if saveFigs
-    exportgraphics(fig, './results/Boulder/fig_adjacency_2018.eps', 'Resolution', 300)
-    close(fig);
-end
-
-figure
-tiledlayout(1, 1, 'TileSpacing','Compact', 'Padding', 'Compact');
+% fig = gcf;
+% fig.Units = 'inches';
+% set(fig, 'position', [0 6.1250 14 7.9861])
+% if saveFigs
+%     exportgraphics(fig, './results/Boulder/fig_adjacency_2018.eps', 'Resolution', figDPI)
+%     close(fig);
+% end
+% 
+% figure
+% tiledlayout(1, 1, 'TileSpacing','Compact', 'Padding', 'Compact');
+nexttile;
 hold on;
 plot(graph, 'LineWidth', 4, 'MarkerSize', 8, 'NodeFontSize', fontSize+6, ...
     'EdgeAlpha', 0.5)
@@ -225,9 +252,10 @@ hold off;
 axis off;
 fig = gcf;
 fig.Units = 'inches';
-set(fig, 'position', [0 7.0417 9.9028 7.0694])
+set(fig, 'position', [0 9 23.1250 9.5556])
 if saveFigs
-    exportgraphics(fig, './results/Boulder/fig_correlation_2018.eps', 'Resolution', 300)
+    exportgraphics(fig, './results/Boulder/fig_correlation_2018.eps', ...
+        'Resolution', figDPI)
     close(fig);
 end
 
@@ -244,26 +272,37 @@ for ii=1:ngroups
     shading flat
     view([0, 90]);
     c = colorbar;
-    c.Label.String = 'Freq. (MHz)';
-    c.FontSize = fontSize;
     h = set(gca,'FontSize', fontSize);
-    set(h,'Interpreter','LaTeX');
-    xticks([1:day:ncols+1]);
-    xticklabels([0:num_days+1]);
-    xlabel('Time (days)', 'FontSize', fontSize);
+%     if sum(ii==lefts)>0
+        yticks([1:100:num_rows])
+        yticklabels([heights(1:100:end)])
+        ylim([0, 250])
+        ylabel('Height (km)', 'FontSize', fontSize);
+%     else
+%         yticks([]);
+%         yticklabels([]);
+%     end
+%     if sum(ii==bottoms)>0
+        c.Label.String = 'Freq. (MHz)';
+        c.FontSize = fontSize;
+        xticks(1:3*day:ncols+1);
+        xticklabels([0:3:num_days+1]);
+        xlabel('Time (days)', 'FontSize', fontSize);
+%     else
+%         xticks([]);
+%         xticklabels([]);
+%     end
+    ylim([0, 250])
     xlim([0, train_stop_day])
-    yticks([1:100:num_rows])
-    yticklabels([heights(1:100:end)])
-    ylim([0, num_rows])
-    ylabel('Height (km)', 'FontSize', fontSize);
     title(sprintf("Wavelet group %d", ii), 'FontSize', fontSize);
 end
 hold off;
 fig = gcf;
 fig.Units = 'inches';
-set(fig, 'position', [0 0 47.7778 18.5556])
+set(fig, 'position', [0 0 42.7222 18.5556])
 if saveFigs
-    exportgraphics(fig, './results/Boulder/fig_wavelet_group_reconstructions_2018.eps', 'Resolution', 300)
+    exportgraphics(fig, './results/Boulder/fig_wavelet_group_reconstructions_2018.eps', ...
+        'Resolution', figDPI)
     close(fig);
 end
 
@@ -271,10 +310,10 @@ end
 wave_group_avgs = model.avgs;
 [nrows, ncols, ngroups] = size(wave_group_avgs);
 figure
-tiledlayout(ceil(ngroups/2), 2, 'TileSpacing','Compact', 'Padding', 'Compact');
+tiledlayout(4, 3, 'TileSpacing','Compact', 'Padding', 'Compact');
 hold on
 for ii=1:ngroups
-    subplot(ceil(ngroups/2), 2, ii);
+    nexttile;
     surf(wave_group_avgs(:, 1:day, ii));
     shading flat
     view([0, 90]);
@@ -294,9 +333,9 @@ end
 hold off;
 fig = gcf;
 fig.Units = 'inches';
-set(fig, 'position', [0 0 47.7778 18.5556])
+set(fig, 'position', [0 0 36.7500 18.5556])
 if saveFigs
-    exportgraphics(fig, './results/Boulder/fig_wavelet_group_24-hour_averages_2018.eps', 'Resolution', 300)
+    exportgraphics(fig, './results/Boulder/fig_wavelet_group_24-hour_averages_2018.eps', 'Resolution', figDPI)
     close(fig);
 end
 
@@ -305,7 +344,7 @@ end
 wave_group_flucs = model.flucs;
 [nrows, ncols, ngroups] = size(wave_group_flucs);
 figure
-tiledlayout(ceil(ngroups/2), 2, 'TileSpacing','Compact', 'Padding', 'Compact');
+tiledlayout(4, 3, 'TileSpacing','Compact', 'Padding', 'Compact');
 hold on
 for ii=1:ngroups
     nexttile;
@@ -328,9 +367,9 @@ end
 hold off;
 fig = gcf;
 fig.Units = 'inches';
-set(fig, 'position', [0 0 47.7778 18.5556])
+set(fig, 'position', [0 0 36.7500 18.5556])
 if saveFigs
-    exportgraphics(fig, './results/Boulder/fig_wavelet_group_24-hour_stds_2018.eps', 'Resolution', 300)
+    exportgraphics(fig, './results/Boulder/fig_wavelet_group_24-hour_stds_2018.eps', 'Resolution', figDPI)
     close(fig);
 end
 
@@ -385,7 +424,7 @@ fig = gcf;
 fig.Units = 'inches';
 set(fig, 'position', [0 6.1667 22.5417 12.3889])
 if saveFigs
-    exportgraphics(fig, './results/Boulder/fig_recon_with_pred_2018.eps', 'Resolution', 300)
+    exportgraphics(fig, './results/Boulder/fig_recon_with_pred_2018.eps', 'Resolution', figDPI)
     close(fig);
 end
 
@@ -397,6 +436,8 @@ avg_model = model.full_recon;
 figure
 h_slice = [200, 150, 100];
 slices = [100, 50, 1];
+% h_slice = [340, 260, 180, 100];
+% slices = [241, 161, 81, 1];
 nslices = length(slices);
 tiledlayout(nslices, 1, 'TileSpacing','Compact', 'Padding', 'Compact');
 for ii=1:nslices
@@ -404,14 +445,14 @@ for ii=1:nslices
     model_avg = avg_model(slices(ii), :);
     N = size(model_avg, 2);
     x_axis = 1:N;
-    plot(ne(slices(ii), :), 'r.', 'markersize', 12);
+    plot(ne(slices(ii), :), 'r.', 'markersize', 14);
     hold on;
-    plot(x_axis, model_avg, 'b--', 'linewidth', 3);
-    xline(num_days_train*day, 'k--', 'linewidth', 3);
-    legend('Measured', 'Modeled', 'End train data', 'Location', 'southeast');
-    xlim([0, day*(num_days+2.5)]);
+    plot(x_axis, model_avg, 'b-', 'linewidth', 4);
+    xline(num_days_train*day, 'k-', 'linewidth', 4);
+    legend('Measured', 'Modeled', 'End train data', 'Location', 'northeast');
+    xlim([0, day*(num_days+2.25)]);
     h = set(gca,'FontSize', fontSize);
-    set(h,'Interpreter','LaTeX');
+%     set(h,'Interpreter','LaTeX');
     if ii==nslices
         xticks([1:day:ncols+1]);
         xticklabels([0:1:num_days]);
@@ -425,9 +466,10 @@ end
 hold off;
 fig = gcf;
 fig.Units = 'inches';
-set(fig, 'position', [0 4.4444 24.8889 14.1111])
+set(fig, 'position', [0 0 30.3750 18.5555])
 if saveFigs
-    exportgraphics(fig, './results/Boulder/fig_avg_model_slices_2018.eps', 'Resolution', 300)
+    exportgraphics(fig, './results/Boulder/fig_avg_model_slices1_2018.eps', ...
+        'Resolution', figDPI)
     close(fig);
 end
 
@@ -442,12 +484,12 @@ for ii=1:nslices
     model_avg = avg_model(slices(ii), :);
     N = size(model_avg, 2);
     x_axis = 1:N;
-    plot(ne(slices(ii), :), 'r.', 'markersize', 12);
+    plot(ne(slices(ii), :), 'r.', 'markersize', 14);
     hold on;
-    plot(x_axis, model_avg, 'b--', 'linewidth', 3);
-    xline(num_days_train*day, 'k--', 'linewidth', 3);
+    plot(x_axis, model_avg, 'b-', 'linewidth', 4);
+    xline(num_days_train*day, 'k-', 'linewidth', 4);
     legend('Measured', 'Modeled', 'End train data', 'Location', 'southeast');
-    xlim([0, day*(num_days+2.5)]);
+    xlim([0, day*(num_days+2.25)]);
     h = set(gca,'FontSize', fontSize);
     set(h,'Interpreter','LaTeX');
     xticks([]);
@@ -458,10 +500,10 @@ end
 hold off;
 fig = gcf;
 fig.Units = 'inches';
-set(fig, 'position', [0 4.4444 24.8889 14.1111])
+set(fig, 'position', [0 0 30.3750 18.5555])
 if saveFigs
     exportgraphics(fig, './results/Boulder/fig_avg_model_slices2_2018.eps', ...
-        'Resolution', 300)
+        'Resolution', figDPI)
     close(fig);
 end
 
@@ -491,7 +533,7 @@ fig.Units = 'inches';
 set(fig, 'position', [0 8.9444 21.6944 9.6112])
 if saveFigs
     exportgraphics(fig, './results/Boulder/fig_error_phase_2018.eps', ...
-        'Resolution', 300)
+        'Resolution', figDPI)
     close(fig);
 end
 
@@ -517,7 +559,7 @@ fig.Units = 'inches';
 set(fig, 'position', [0 9 25.5556 9.5556])
 if saveFigs
     exportgraphics(fig, './results/Boulder/fig_error_time_2018.eps', ...
-        'Resolution', 300)
+        'Resolution', figDPI)
     close(fig);
 end
 
@@ -526,7 +568,7 @@ end
 % Height dependent error, avg. in time (SSDMD vs IRI vs Daily median)
 lw = 3;
 figure
-tiledlayout(1, 1, 'TileSpacing','Compact', 'Padding', 'Compact');
+tiledlayout(1, 2, 'TileSpacing','Compact', 'Padding', 'Compact');
 nexttile;
 plot(mean(abs_per_err_ssdmd(:, 1:train_stop_day), 2), heights, 'b-', 'LineWidth', lw);
 hold on
@@ -538,18 +580,18 @@ ylabel('Height (km)', 'FontSize', fontSize)
 title('Train')
 h = set(gca,'FontSize', fontSize);
 hold off;
-fig = gcf;
-fig.Units = 'inches';
-set(fig, 'position', [0 6.5417 10.5000 12.0139])
-if saveFigs
-    exportgraphics(fig, './results/Boulder/fig_error_height_train_2018.eps', ...
-        'Resolution', 300)
-    close(fig);
-end
-% Height dependent error, avg. in time (SSDMD vs IRI vs Daily median)
-lw = 3;
-figure
-tiledlayout(1, 1, 'TileSpacing','Compact', 'Padding', 'Compact');
+% fig = gcf;
+% fig.Units = 'inches';
+% set(fig, 'position', [0 6.5417 10.5000 12.0139])
+% if saveFigs
+%     exportgraphics(fig, './results/Boulder/fig_error_height_train_2018.eps', ...
+%         'Resolution', figDPI)
+%     close(fig);
+% end
+% % Height dependent error, avg. in time (SSDMD vs IRI vs Daily median)
+% lw = 3;
+% figure
+% tiledlayout(1, 1, 'TileSpacing','Compact', 'Padding', 'Compact');
 nexttile;
 plot(mean(abs_per_err_ssdmd(:, train_stop_day:end), 2), heights, 'b-', 'LineWidth', lw);
 hold on
@@ -563,10 +605,10 @@ h = set(gca,'FontSize', fontSize);
 hold off;
 fig = gcf;
 fig.Units = 'inches';
-set(fig, 'position', [0 6.5417 10.5000 12.0139])
+set(fig, 'position', [0 7.8611 20.4722 10.6945])
 if saveFigs
     exportgraphics(fig, './results/Boulder/fig_error_height_test_2018.eps', ...
-        'Resolution', 300)
+        'Resolution', figDPI)
     close(fig);
 end
 
@@ -579,7 +621,7 @@ for ii=1:day
 end
 mape_hours_ssdmd1 = circshift(mape_hours_ssdmd1, 72, 2);
 figure
-tiledlayout(1, 1, 'TileSpacing', 'compact', 'Padding', 'compact');
+tiledlayout(1, 2, 'TileSpacing', 'compact', 'Padding', 'compact');
 nexttile;
 surf(mape_hours_ssdmd1);
 shading flat
@@ -600,14 +642,14 @@ ylabel('Height (km)', 'FontSize', fontSize)
 title('Train')
 h = set(gca,'FontSize', fontSize);
 hold off;
-fig = gcf;
-fig.Units = 'inches';
-set(fig, 'position', [-7.9722 17.3194 21.7917 13])
-if saveFigs
-    exportgraphics(fig, './results/Boulder/fig_error_hours_train_2018.eps', ...
-        'Resolution', 300)
-    close(fig);
-end
+% fig = gcf;
+% fig.Units = 'inches';
+% set(fig, 'position', [-7.9722 17.3194 21.7917 13])
+% if saveFigs
+%     exportgraphics(fig, './results/Boulder/fig_error_hours_train_2018.eps', ...
+%         'Resolution', figDPI)
+%     close(fig);
+% end
 
 %%%% Test
 mape_hours_ssdmd2 = zeros(num_rows, day);
@@ -615,8 +657,8 @@ for ii=1:day
     mape_hours_ssdmd2(:, ii) = mean(abs_per_err_ssdmd(:, ii+train_stop_day:day:end), 2);
 end
 mape_hours_ssdmd2 = circshift(mape_hours_ssdmd2, 72, 2);
-figure
-tiledlayout(1, 1, 'TileSpacing','Compact', 'Padding', 'Compact');
+% figure
+% tiledlayout(1, 1, 'TileSpacing','Compact', 'Padding', 'Compact');
 nexttile;
 surf(mape_hours_ssdmd2);
 shading flat
@@ -638,10 +680,10 @@ h = set(gca,'FontSize', fontSize);
 hold off;
 fig = gcf;
 fig.Units = 'inches';
-set(fig, 'position', [-7.9722 17.3194 21.7917 13])
+set(fig, 'position', [0 7.3472 36.3333 11.2083])
 if saveFigs
     exportgraphics(fig, './results/Boulder/fig_error_hours_test_2018.eps', ...
-        'Resolution', 300)
+        'Resolution', figDPI)
     close(fig);
 end
 
@@ -656,7 +698,7 @@ pt_err_iri_fit = ne(:, 1:train_stop_day) - ...
     iri.ne(:, 1:train_stop_day);
 
 figure
-tiledlayout(1, 1, 'TileSpacing','Compact', 'Padding', 'Compact');
+tiledlayout(1, 2, 'TileSpacing','Compact', 'Padding', 'Compact');
 nexttile;
 h2 = histogram(pt_err_iri_fit);
 h2.Normalization = norm_type;
@@ -675,14 +717,14 @@ xlabel('$${\bf Y} - {\bf \hat{Y}}$$ (MHz)', 'Interpreter', 'latex')
 ylabel('PDF')
 title('Train')
 h = set(gca,'FontSize', fontSize);
-fig = gcf;
-fig.Units = 'inches';
-set(fig, 'position', [0 10.5556 11.6944 8.0000])
-if saveFigs
-    exportgraphics(fig, './results/Boulder/fig_error_hist_train_2018.eps', ...
-        'Resolution', 300)
-    close(fig);
-end
+% fig = gcf;
+% fig.Units = 'inches';
+% set(fig, 'position', [0 10.5556 11.6944 8.0000])
+% if saveFigs
+%     exportgraphics(fig, './results/Boulder/fig_error_hist_train_2018.eps', ...
+%         'Resolution', figDPI)
+%     close(fig);
+% end
 
 %%%%% Test
 pt_err_ssdmd_test = ne(:, train_stop_day:end) - ...
@@ -690,8 +732,8 @@ pt_err_ssdmd_test = ne(:, train_stop_day:end) - ...
 pt_err_iri_test = ne(:, train_stop_day:end) - ...
     iri.ne(:, train_stop_day:end);
 
-figure
-tiledlayout(1, 1, 'TileSpacing','Compact', 'Padding', 'Compact');
+% figure
+% tiledlayout(1, 1, 'TileSpacing','Compact', 'Padding', 'Compact');
 nexttile;
 h2 = histogram(pt_err_iri_test);
 h2.Normalization = norm_type;
@@ -712,10 +754,10 @@ title('Test')
 h = set(gca,'FontSize', fontSize);
 fig = gcf;
 fig.Units = 'inches';
-set(fig, 'position', [0 10.5556 11.6944 8.0000])
+set(fig, 'position', [0 9.5972 22.4722 8.9584])
 if saveFigs
     exportgraphics(fig, './results/Boulder/fig_error_hist_test_2018.eps', ...
-        'Resolution', 300)
+        'Resolution', figDPI)
     close(fig);
 end
 
