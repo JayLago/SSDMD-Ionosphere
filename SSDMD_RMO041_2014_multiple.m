@@ -21,8 +21,10 @@ heights = data.heights(h_low:h_high);
 full_times = data.times;
 
 % Load IRI
-load(strcat(station, '_IRI_', file_date));
-ne_iri = iri.ne(151:500, :);
+iri = load(strcat(station, '_IRI_', file_date));
+iri_hmin = find(iri.alt_km==heights(1));
+iri_hmax = find(iri.alt_km==heights(end));
+ne_iri = iri.ne(iri_hmin:iri_hmax, :);
 fof2_iri = iri.foF2;
 hmf2_iri = iri.hmF2;
 
@@ -40,17 +42,16 @@ corr_tol = -1.75;
 nd_train = 10;
 nd_test = 2;
 nd = nd_train + nd_test;
-wave_levels = floor(log2(nd_train*day + 1)); %wmaxlev(nd*day, wave_type);
-
+wave_levels = floor(log2(nd_train*day + 1));
 % Random initial conditions to train on during the year
 bad1 = [28978, 30358];
 bad2 = [16911, 19307];
 n_rstart = 30;
 rng(1997, 'twister');
 s = RandStream('mlfg6331_64');
-r1 = datasample(s, 3000:12500, 10, 'Replace', false);
-r2 = datasample(s, 24700:29600, 10, 'Replace', false);
-r3 = datasample(s, 30350:33340, 10, 'Replace', false);
+r1 = datasample(s, 3000:17300, 15, 'Replace', false);
+r2 = datasample(s, 24700:29600, 5, 'Replace', false);
+r3 = datasample(s, 30350:33800, 10, 'Replace', false);
 rstart = cat(2, r1, r2, r3);
 
 
@@ -108,8 +109,4 @@ fprintf('\n avg. mae: %d\n', mean(quick_mae))
 
 %%
 save('Run_RO041_2014')
-
-
-
-
 

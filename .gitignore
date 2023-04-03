@@ -1,4 +1,5 @@
 #### Added by Jay Lago
+__MACOSX/
 .DS_Store
 *.fig
 *.pkl
@@ -8,6 +9,8 @@
 *.pdf
 *.svg
 *.ai
+figs/
+*.zip
 
 
 # Byte-compiled / optimized / DLL files

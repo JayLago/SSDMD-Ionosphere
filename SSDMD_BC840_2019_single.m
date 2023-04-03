@@ -17,9 +17,11 @@ full_times = data.times;
 
 % Load IRI
 iri = load(strcat(station, '_IRI_', file_date));
-ne_iri = iri.iri.ne(151:500,:);
-[fof2_iri, hmf2_] = max(ne_iri, [], 1);
-hmf2_iri = cast(heights(hmf2_), 'double');
+iri_hmin = find(iri.alt_km==heights(1));
+iri_hmax = find(iri.alt_km==heights(end));
+ne_iri = iri.ne(iri_hmin:iri_hmax, :);
+fof2_iri = iri.foF2;
+hmf2_iri = iri.hmF2;
 
 % Load Didbase profile characteristics
 chars = load(strcat(station, '_FastChars_', file_date));
@@ -58,8 +60,10 @@ model = ssdmd(train_data, wave_levels, wave_type, dmd_tol, ...
 
 
 
-%% Total reconstructions with hmf2 param
-fontSize = 32;
+%% Total reconstructions with hmf2 param plotted on top
+fs = 36;
+
+% Shift hmf2 so the indices line up with data in plot
 hmf2_ = hmf2_data - double(heights(1));
 
 tiledlayout(2, 1, 'TileSpacing','Compact', 'Padding', 'Compact');
@@ -75,9 +79,9 @@ c = colorbar;
 colormap('jet')
 c.Label.String = 'Plasma Frequency (MHz)';
 caxis([0 6]);
-xl = xline(nd_train*day, 'w--', 'linewidth', 4);
-title('Measurement', 'FontSize', fontSize);
-h = set(gca,'FontSize', fontSize);
+xl = xline(nd_train*day, 'm--', 'linewidth', 4);
+title('Measurement', 'FontSize', fs);
+h = set(gca,'FontSize', fs);
 set(h,'Interpreter','LaTeX')
 xticks([1:day:num_cols])
 xticklabels([])
@@ -86,11 +90,12 @@ ylim([0, num_rows])
 xlabel([])
 yticks([1:100:num_rows])
 yticklabels([heights(1:100:end)])
-ylabel('Height (km)', 'FontSize', fontSize)
+ylabel('Height (km)', 'FontSize', fs)
 legend([hl], 'hmF2')
 hold off
 
 
+% Shift hmf2 so the indices line up with data in plot
 hmf2_ = model.hmf2 - double(heights(1));
 
 nexttile;
@@ -105,21 +110,19 @@ c = colorbar;
 colormap('jet')
 c.Label.String = 'Plasma Frequency (MHz)';
 caxis([0 6]);
-xl = xline(nd_train*day, 'w--', 'linewidth', 4);
-title('SSDMD', 'FontSize', fontSize);
-h = set(gca,'FontSize', fontSize);
+xl = xline(nd_train*day, 'm--', 'linewidth', 4);
+title('SSDMD', 'FontSize', fs);
+h = set(gca,'FontSize', fs);
 set(h,'Interpreter','LaTeX')
 xticks([1:day:num_cols])
 xticklabels([0:num_days])
 xlim([0, num_cols])
 ylim([0, num_rows])
-xlabel('Time (days)', 'FontSize', fontSize)
+xlabel('Time (days)', 'FontSize', fs)
 yticks([1:100:num_rows])
 yticklabels([heights(1:100:end)])
-ylabel('Height (km)', 'FontSize', fontSize)
+ylabel('Height (km)', 'FontSize', fs)
 legend([hl], 'hmF2')
 hold off;
-
-
 
 

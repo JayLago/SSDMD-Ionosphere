@@ -7,7 +7,7 @@ clear; close all; clc;
 
 % Set up for parallel processing
 if isempty(gcp('nocreate'))
-    parpool(8); % Be sure to set number of cpu cores here
+    parpool(8); % Set number of cpu cores here
 end
 
 % Load sounder data
@@ -22,9 +22,11 @@ full_times = data.times;
 
 % Load IRI
 iri = load(strcat(station, '_IRI_', file_date));
-ne_iri = iri.iri.ne(151:500, :);
-fof2_iri = iri.iri.foF2;
-hmf2_iri = iri.iri.hmF2;
+iri_hmin = find(iri.alt_km==heights(1));
+iri_hmax = find(iri.alt_km==heights(end));
+ne_iri = iri.ne(iri_hmin:iri_hmax, :);
+fof2_iri = iri.foF2;
+hmf2_iri = iri.hmF2;
 
 % Load Didbase profile characteristics
 chars = load(strcat(station, '_FastChars_', file_date));
@@ -40,17 +42,17 @@ corr_tol = -1.95;
 nd_train = 10;
 nd_test = 2;
 nd = nd_train + nd_test;
-wave_levels = floor(log2(nd_train*day + 1)); %wmaxlev(nd*day, wave_type);
+wave_levels = floor(log2(nd_train*day + 1));
 
 % Random initial conditions to train on during the year
-bad1 = [25548, 31271];  % These portions of the data contain too many missing values
-bad2 = [66568, 67495];
 n_rstart = 30;
 rng(1997, 'twister');
 s = RandStream('mlfg6331_64');
-r1 = datasample(s, 13500:18107, 10, 'Replace', false);
-r2 = datasample(s, 72651:101664, 20, 'Replace', false);
-rstart = cat(2, r1, r2);
+% Data outside these ranges has too many missing observations
+r1 = datasample(s, 1:24000, 10, 'Replace', false);
+r2 = datasample(s, 39000:66000, 5, 'Replace', false);
+r3 = datasample(s, 73000:100000, 15, 'Replace', false);
+rstart = cat(2, r1, r2, r3);
 
 
 %% Build/test SSDMD models for random initial starts over the year
@@ -87,7 +89,7 @@ parfor ii=1:n_rstart
     % Save forecasted parameters for this period
     full_fof2_ssdmd(ii, :) = model.fof2;
     full_hmf2_ssdmd(ii, :) = model.hmf2;
-    full_test_times(ii, :) = iri.iri.times(start_ix:stop_ix)
+    full_test_times(ii, :) = iri.times(start_ix:stop_ix)
     model.num_comps;
 
     % Save the test data for this period
@@ -107,15 +109,5 @@ fprintf('\n avg. mae: %d\n', mean(quick_mae))
 
 %%
 save('Run_BC840_2019')
-
-
-
-
-
-
-
-
-
-
 
 
